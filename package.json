@@ -1,0 +1,33 @@
+{
+  "name": "disconsulate",
+  "version": "0.1.0",
+  "description": "A tiny load-balancing service discovery tool for Consul.",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "lab",
+    "lint": "prettier"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bobthemighty/disconsulate.git"
+  },
+  "keywords": [
+    "consul",
+    "service",
+    "discovery",
+    "round",
+    "robin"
+  ],
+  "author": "Bob Gregory",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bobthemighty/disconsulate/issues"
+  },
+  "homepage": "https://github.com/bobthemighty/disconsulate#readme",
+  "dependencies": {
+    "code": "^5.2.4",
+    "lab": "^18.0.0",
+    "node-fetch": "^2.3.0"
+  },
+  "devDependencies": {}
+}
