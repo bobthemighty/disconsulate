@@ -25,9 +25,13 @@
   },
   "homepage": "https://github.com/bobthemighty/disconsulate#readme",
   "dependencies": {
-    "code": "^5.2.4",
-    "lab": "^18.0.0",
-    "node-fetch": "^2.3.0"
+    "phin": "^3.2.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "code": "^5.2.4",
+    "eslint-config-prettier": "^3.3.0",
+    "eslint-plugin-prettier": "^3.0.0",
+    "lab": "^18.0.0",
+    "prettier-eslint": "^8.8.2"
+  }
 }
