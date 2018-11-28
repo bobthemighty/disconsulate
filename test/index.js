@@ -1,4 +1,4 @@
-const { expect } = require("code");
+const { expect, fail } = require("code");
 const Lab = require("lab");
 const { after, before, describe, it } = (exports.lab = Lab.script());
 
@@ -126,5 +126,69 @@ describe("When using environment variables", async () => {
 
   it("calls the health endpoint", () => {
     expect(request.url).to.startWith("/v1/health/service/bar");
+  });
+});
+
+describe("When the response is large", () => {
+  let request = null;
+
+  const server = Http.createServer((req, res) => {
+    data = [];
+    for (let i = 0; i < 10000; i++) {
+      data.push({
+        Service: {
+          Address: "machine-" + i,
+          port: i
+        }
+      });
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    request = req;
+    res.end(JSON.stringify(data));
+  });
+
+  before(async () => {
+    await server.listen(0);
+    const client = new Disconsulate({
+      consul: `http://localhost:${server.address().port}`
+    });
+    await client.getService("baz", {
+      node: {
+        availabilityZone: "A",
+        type: "t2.micro"
+      }
+    });
+  });
+
+  it("calls the health endpoint", () => {
+    expect(request.url).to.equal(
+      "/v1/health/service/baz?passing=1&near=agent&node-meta=availabilityZone:A&node-meta=type:t2.micro"
+    );
+  });
+});
+
+describe("When the server fails", () => {
+  let request = null;
+
+  const server = Http.createServer((req, res) => {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    request = req;
+    res.end();
+  });
+
+  before(async () => {
+    await server.listen(0);
+  });
+
+  it("propagates the error", async () => {
+    const client = new Disconsulate({
+      consul: `http://localhost:${server.address().port}`
+    });
+
+    try {
+      const value = await client.getService("some-service");
+      fail("Expected an error, but received value: " + JSON.stringify(result));
+    } catch (e) {
+    }
   });
 });
