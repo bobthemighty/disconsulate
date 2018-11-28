@@ -24,9 +24,7 @@
     "url": "https://github.com/bobthemighty/disconsulate/issues"
   },
   "homepage": "https://github.com/bobthemighty/disconsulate#readme",
-  "dependencies": {
-    "phin": "^3.2.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "code": "^5.2.4",
     "eslint-config-prettier": "^3.3.0",

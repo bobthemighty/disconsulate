@@ -29,7 +29,7 @@ describe("getService", async () => {
   });
 
   it("calls the health endpoint", () => {
-    expect(request.url).to.equal("/v1/health/service/foo");
+    expect(request.url).to.equal("/v1/health/service/foo?passing=1&near=agent");
   });
 });
 
@@ -60,6 +60,6 @@ describe("When using environment variables", async () => {
   });
 
   it("calls the health endpoint", () => {
-    expect(request.url).to.equal("/v1/health/service/bar");
+    expect(request.url).to.startWith("/v1/health/service/bar");
   });
 });
