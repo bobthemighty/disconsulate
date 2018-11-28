@@ -1,7 +1,11 @@
 language: node_js
-
 node_js:
-  - "8"
-  - "node"
-
+- '8'
+- node
 sudo: false
+deploy:
+  tag: next
+  on:
+    tags: true
+  api_key:
+    secure: Hi3TWTFzHNqIgUiSWjxxPZIT0QmEwxmg2FItTR9clZgVn8U6IrQiozQhST2V6uwjf/c18W3XzOSrQtkAwD9UXYIhsDlGQRVFv9yevlZu9Y5+nMeevYCwqEn4kOhw5G5hWcE2MZKZAdv1GSDw6An9gh68bc0rOcGEEVxTFmTr5kBGTAs/15u4GvT72L1drLB5b1yUbRYr6F/rKl1eFFxz6BH1ar95Pu/k/mhncUBQtlE1zb44F50MlcaUGpVXIrofvJ+SrGrMBMYBlZn7NxuSMiSYrw/Y+pGGQwv/7KaRhV1GO7QMJoCQxzeQvLfdOYNAXBdAL2eSYOkefrCMnBjB0KJMFG0hcGWWcYMflfyrCzaxu4UXucP8sFjgYqjXVmp9jgCbneGTy+zpwLU7KhWi7l3ABhZIShiPiiW4ydaLzdYGLMcV8DRzNQEGWDgr8WwOOeDtTv1Vqjcrb1xLckv+5758+WCUP39IyOHCiem/4nYghPVIkPcfQYfHCs2Wg4vN43bpwThUYf9NKD9U+R4o0r2vSN8YeuCLVYGSVvYcgC7DZoqbYblGVv637fimcMDhCeeFvEZ9i6mxeg1pgWY+oqdieLoG39im1bqjb8CQ3nlDLlgcOJ+lnEp/jB7FWjx8Bx/KtGMvKm/ASmpcp9l45Jc9V+z08zuewxmbXAWrSZk=
