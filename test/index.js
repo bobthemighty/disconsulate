@@ -270,7 +270,7 @@ describe("When we receive no services", async () => {
     try {
       result = await client.getService("foo");
       fail("Expected failure but received result " + JSON.stringify(result));
-    } catch {}
+    } catch (e) {}
   });
 
 });
