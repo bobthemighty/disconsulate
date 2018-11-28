@@ -7,12 +7,14 @@ const Disconsulate = require("../");
 
 describe("getService", async () => {
   let request = null;
+  let result = null;
 
   const server = Http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     request = req;
     res.end(
-      JSON.stringify([{ Service: { Address: "configured.com", Port: "1234" } }])
+      JSON.stringify([{ Service: { Address: "10.0.0.1", Port: "1234" } }]),
+      JSON.stringify([{ Service: { Address: "10.0.0.2", Port: "2345" } }])
     );
   });
 
@@ -21,7 +23,7 @@ describe("getService", async () => {
     const client = new Disconsulate({
       consul: `http://localhost:${server.address().port}`
     });
-    await client.getService("foo");
+    result = await client.getService("foo");
   });
 
   it("calls the configured address", () => {
@@ -30,6 +32,11 @@ describe("getService", async () => {
 
   it("calls the health endpoint", () => {
     expect(request.url).to.equal("/v1/health/service/foo?passing=1&near=agent");
+  });
+
+  it("returns the first of the registered services", () => {
+    expect(result.Address).to.equal("10.0.0.1");
+    expect(result.Port).to.equal("1234");
   });
 });
 
@@ -55,10 +62,10 @@ describe("When specifying additional options", () => {
   });
 
   it("calls the health endpoint", () => {
-    expect(request.url).to.equal("/v1/health/service/baz?passing=1&near=agent&dc=eu-west-1&tag=active&tag=release-123");
+    expect(request.url).to.equal(
+      "/v1/health/service/baz?passing=1&near=agent&dc=eu-west-1&tag=active&tag=release-123"
+    );
   });
-
-
 });
 
 describe("When specifying node metadata", () => {
@@ -79,20 +86,17 @@ describe("When specifying node metadata", () => {
     await client.getService("baz", {
       node: {
         availabilityZone: "A",
-        type: "t2.micro",
+        type: "t2.micro"
       }
     });
   });
 
   it("calls the health endpoint", () => {
-    expect(request.url).to.equal("/v1/health/service/baz?passing=1&near=agent&node-meta=availabilityZone:A&node-meta=type:t2.micro");
+    expect(request.url).to.equal(
+      "/v1/health/service/baz?passing=1&near=agent&node-meta=availabilityZone:A&node-meta=type:t2.micro"
+    );
   });
-
-
 });
-
-
-
 
 describe("When using environment variables", async () => {
   let request = null;
