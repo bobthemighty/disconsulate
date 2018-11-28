@@ -4,6 +4,8 @@ node_js:
 - node
 sudo: false
 deploy:
+  provider: npm
+  email: "bob@codefiend.co.uk"
   tag: next
   on:
     tags: true
