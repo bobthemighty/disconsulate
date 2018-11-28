@@ -8,19 +8,22 @@ const Disconsulate = require("../");
 describe("getService", async () => {
   let request = null;
   let result = null;
+  let client = null;
 
   const server = Http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     request = req;
     res.end(
-      JSON.stringify([{ Service: { Address: "10.0.0.1", Port: "1234" } }]),
-      JSON.stringify([{ Service: { Address: "10.0.0.2", Port: "2345" } }])
+      JSON.stringify([
+        { Service: { Address: "10.0.0.1", Port: "1234" } },
+        { Service: { Address: "10.0.0.2", Port: "2345" } }
+      ])
     );
   });
 
   before(async () => {
     await server.listen(0);
-    const client = new Disconsulate({
+    client = new Disconsulate({
       consul: `http://localhost:${server.address().port}`
     });
     result = await client.getService("foo");
@@ -37,6 +40,18 @@ describe("getService", async () => {
   it("returns the first of the registered services", () => {
     expect(result.Address).to.equal("10.0.0.1");
     expect(result.Port).to.equal("1234");
+  });
+
+  it("cycles through all registered services when asked again", async () => {
+    let result = await client.getService("foo");
+    expect(result.Address).to.equal("10.0.0.2");
+    expect(result.Port).to.equal("2345");
+
+    result = await client.getService("foo");
+    expect(result.Address).to.equal("10.0.0.1");
+
+    result = await client.getService("foo");
+    expect(result.Address).to.equal("10.0.0.2");
   });
 });
 
@@ -186,11 +201,12 @@ describe("When the server fails with error text", () => {
       const value = await client.getService("some-service");
       fail("Expected an error, but received value: " + JSON.stringify(result));
     } catch (e) {
-      expect(e.message).to.endWith("/v1/health/service/some-service?passing=1&near=agent: That didn't work");
+      expect(e.message).to.endWith(
+        "/v1/health/service/some-service?passing=1&near=agent: That didn't work"
+      );
     }
   });
 });
-
 
 describe("When the server fails", () => {
   let request = null;
@@ -213,8 +229,7 @@ describe("When the server fails", () => {
     try {
       const value = await client.getService("some-service");
       fail("Expected an error, but received value: " + JSON.stringify(result));
-    } catch (e) {
-    }
+    } catch (e) {}
   });
 });
 
@@ -229,8 +244,33 @@ describe("When there is no server", () => {
     try {
       const value = await client.getService("some-service");
       fail("Expected an error, but received value: " + JSON.stringify(result));
-    } catch (e) {
-    }
+    } catch (e) {}
   });
 });
 
+describe("When we receive no services", async () => {
+  let request = null;
+  let result = null;
+  let client = null;
+
+  const server = Http.createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    request = req;
+    res.end("[]");
+  });
+
+  before(async () => {
+    await server.listen(0);
+    client = new Disconsulate({
+      consul: `http://localhost:${server.address().port}`
+    });
+  });
+
+  it("Fails with an error", async () => {
+    try {
+      result = await client.getService("foo");
+      fail("Expected failure but received result " + JSON.stringify(result));
+    } catch {}
+  });
+
+});
