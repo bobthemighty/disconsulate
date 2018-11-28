@@ -5,36 +5,61 @@ const { after, before, describe, it } = (exports.lab = Lab.script());
 const Http = require("http");
 const Disconsulate = require("../");
 
+class FakeConsul {
+  constructor() {
+    this.responses = [];
+    this.requests = [];
+    this.server = null;
+  }
+
+  addResponse(response) {
+    this.responses.push(response);
+  }
+
+  async start() {
+    const consul = this;
+    this.server = Http.createServer((req, res) => {
+      const { statusCode = 200, body } = consul.responses.shift();
+      consul.requests.push(req);
+
+      res.writeHead(statusCode, { "Content-Type": "application/json" });
+      res.end(body);
+    });
+    await this.server.listen(0);
+  }
+
+  getAddress() {
+    return `http://localhost:${this.server.address().port}`;
+  }
+}
+
 describe("getService", async () => {
   let request = null;
   let result = null;
   let client = null;
 
-  const server = Http.createServer((req, res) => {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    request = req;
-    res.end(
-      JSON.stringify([
-        { Service: { Address: "10.0.0.1", Port: "1234" } },
-        { Service: { Address: "10.0.0.2", Port: "2345" } }
-      ])
-    );
+  const consul = new FakeConsul();
+  consul.addResponse({
+    body: JSON.stringify([
+      { Service: { Address: "10.0.0.1", Port: "1234" } },
+      { Service: { Address: "10.0.0.2", Port: "2345" } }
+    ])
   });
 
   before(async () => {
-    await server.listen(0);
-    client = new Disconsulate({
-      consul: `http://localhost:${server.address().port}`
-    });
+    await consul.start(0);
+    client = new Disconsulate(consul.getAddress());
     result = await client.getService("foo");
   });
 
   it("calls the configured address", () => {
-    expect(request).to.not.be.null();
+    expect(consul.requests[0]).to.exist();
   });
 
   it("calls the health endpoint", () => {
-    expect(request.url).to.equal("/v1/health/service/foo?passing=1&near=agent");
+    expect(consul.requests[0].url).to.equal(
+      "/v1/health/service/foo?passing=1&near=agent"
+    );
   });
 
   it("returns the first of the registered services", () => {
@@ -55,21 +80,18 @@ describe("getService", async () => {
   });
 });
 
-describe("When specifying additional options", () => {
-  let request = null;
+describe("When the server returns X-Consul-Index", () => {});
 
-  const server = Http.createServer((req, res) => {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    request = req;
-    res.end(
-      JSON.stringify([{ Service: { Address: "configured.com", Port: "1234" } }])
-    );
+describe("When specifying additional options", () => {
+
+  const consul = new FakeConsul();
+  consul.addResponse({
+    body: JSON.stringify([{ Service: { Address: "10.0.0.1", Port: "1234" } }])
   });
 
   before(async () => {
-    await server.listen(0);
-    process.env.CONSUL_ADDR = `http://localhost:${server.address().port}`;
-    const client = new Disconsulate();
+    await consul.start();
+    const client = new Disconsulate(consul.getAddress());
     await client.getService("baz", {
       tags: ["active", "release-123"],
       dc: "eu-west-1"
@@ -77,7 +99,7 @@ describe("When specifying additional options", () => {
   });
 
   it("calls the health endpoint", () => {
-    expect(request.url).to.equal(
+    expect(consul.requests[0].url).to.equal(
       "/v1/health/service/baz?passing=1&near=agent&dc=eu-west-1&tag=active&tag=release-123"
     );
   });
@@ -164,9 +186,9 @@ describe("When the response is large", () => {
 
   before(async () => {
     await server.listen(0);
-    const client = new Disconsulate({
-      consul: `http://localhost:${server.address().port}`
-    });
+    const client = new Disconsulate(
+      `http://localhost:${server.address().port}`
+    );
     await client.getService("baz", {
       node: {
         availabilityZone: "A",
@@ -193,9 +215,9 @@ describe("When the server fails with error text", () => {
   });
 
   it("propagates the error", async () => {
-    const client = new Disconsulate({
-      consul: `http://localhost:${server.address().port}`
-    });
+    const client = new Disconsulate(
+      `http://localhost:${server.address().port}`
+    );
 
     try {
       const value = await client.getService("some-service");
@@ -222,9 +244,9 @@ describe("When the server fails", () => {
   });
 
   it("propagates the error", async () => {
-    const client = new Disconsulate({
-      consul: `http://localhost:${server.address().port}`
-    });
+    const client = new Disconsulate(
+      `http://localhost:${server.address().port}`
+    );
 
     try {
       const value = await client.getService("some-service");
@@ -237,9 +259,7 @@ describe("When there is no server", () => {
   let request = null;
 
   it("propagates the error", async () => {
-    const client = new Disconsulate({
-      consul: "http://consul.invalid"
-    });
+    const client = new Disconsulate("http://203.0.113.0");
 
     try {
       const value = await client.getService("some-service");
@@ -261,9 +281,7 @@ describe("When we receive no services", async () => {
 
   before(async () => {
     await server.listen(0);
-    client = new Disconsulate({
-      consul: `http://localhost:${server.address().port}`
-    });
+    client = new Disconsulate(`http://localhost:${server.address().port}`);
   });
 
   it("Fails with an error", async () => {
@@ -272,5 +290,4 @@ describe("When we receive no services", async () => {
       fail("Expected failure but received result " + JSON.stringify(result));
     } catch (e) {}
   });
-
 });
