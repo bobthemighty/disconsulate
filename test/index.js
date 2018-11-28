@@ -133,7 +133,7 @@ describe("When the response is large", () => {
   let request = null;
 
   const server = Http.createServer((req, res) => {
-    data = [];
+    let data = [];
     for (let i = 0; i < 10000; i++) {
       data.push({
         Service: {
@@ -167,6 +167,31 @@ describe("When the response is large", () => {
   });
 });
 
+describe("When the server fails with error text", () => {
+  const server = Http.createServer((req, res) => {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end("That didn't work");
+  });
+
+  before(async () => {
+    await server.listen(0);
+  });
+
+  it("propagates the error", async () => {
+    const client = new Disconsulate({
+      consul: `http://localhost:${server.address().port}`
+    });
+
+    try {
+      const value = await client.getService("some-service");
+      fail("Expected an error, but received value: " + JSON.stringify(result));
+    } catch (e) {
+      expect(e.message).to.endWith("/v1/health/service/some-service?passing=1&near=agent: That didn't work");
+    }
+  });
+});
+
+
 describe("When the server fails", () => {
   let request = null;
 
@@ -192,3 +217,20 @@ describe("When the server fails", () => {
     }
   });
 });
+
+describe("When there is no server", () => {
+  let request = null;
+
+  it("propagates the error", async () => {
+    const client = new Disconsulate({
+      consul: "http://consul.invalid"
+    });
+
+    try {
+      const value = await client.getService("some-service");
+      fail("Expected an error, but received value: " + JSON.stringify(result));
+    } catch (e) {
+    }
+  });
+});
+
