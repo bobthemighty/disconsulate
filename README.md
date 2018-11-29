@@ -1,8 +1,8 @@
 # disconsulate
 A light-weight loadbalancing service discovery lib for Consul
 
-Travis
 [![Status](https://travis-ci.org/bobthemighty/disconsulate.svg?branch=master)](https://travis-ci.org/bobthemighty/disconsulate)  
+[![node](https://img.shields.io/node/v/disconsulate.svg)](https://www.npmjs.com/package/disconsulate)
 
 Consulate is an opinionated wrapper for Consul's service discovery API. It's heavily inspired by [https://www.npmjs.com/package/consulite](Consulite) but has a few more tricks up its sleeve.
 
