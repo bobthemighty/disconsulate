@@ -51,8 +51,8 @@ describe("getService", async () => {
   const consul = new FakeConsul();
   consul.addResponse({
     body: JSON.stringify([
-      { Service: { Address: "10.0.0.1", Port: "1234" } },
-      { Service: { Address: "10.0.0.2", Port: "2345" } }
+      { Service: { Address: "10.0.0.1", Port: "1234", Tags: ["active"] } },
+      { Service: { Address: "10.0.0.2", Port: "2345", Tags: ["passive"] } }
     ])
   });
 
@@ -78,12 +78,14 @@ describe("getService", async () => {
   it("returns the first of the registered services", () => {
     expect(result.address).to.equal("10.0.0.1");
     expect(result.port).to.equal("1234");
+    expect(result.tags).to.equal(["active"]);
   });
 
   it("cycles through all registered services when asked again", async () => {
     let result = await client.getService(ServiceName);
     expect(result.address).to.equal("10.0.0.2");
     expect(result.port).to.equal("2345");
+    expect(result.tags).to.equal(["passive"]);
 
     result = await client.getService(ServiceName);
     expect(result.address).to.equal("10.0.0.1");
