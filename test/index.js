@@ -13,17 +13,23 @@ class FakeConsul {
     this.server = null;
   }
 
-  addResponse(response) {
+  addResponse(response = {}) {
     this.responses.push(response);
   }
 
   async start() {
     const consul = this;
     this.server = Http.createServer((req, res) => {
-      const { statusCode = 200, body } = consul.responses.shift();
+      const { statusCode = 200, body, index } = consul.responses.shift();
       consul.requests.push(req);
+      const headers = {
+        "Content-Type": "application/json"
+      };
 
-      res.writeHead(statusCode, { "Content-Type": "application/json" });
+      if (index !== undefined) {
+        headers["X-Consul-Index"] = index;
+      }
+      res.writeHead(statusCode, headers);
       res.end(body);
     });
     await this.server.listen(0);
@@ -38,6 +44,9 @@ describe("getService", async () => {
   let request = null;
   let result = null;
   let client = null;
+  let events = [];
+
+  const ServiceName = "nginx-stats";
 
   const consul = new FakeConsul();
   consul.addResponse({
@@ -50,7 +59,10 @@ describe("getService", async () => {
   before(async () => {
     await consul.start(0);
     client = new Disconsulate(consul.getAddress());
-    result = await client.getService("foo");
+    client.on("change", e => {
+      events.push(e);
+    });
+    result = await client.getService(ServiceName);
   });
 
   it("calls the configured address", () => {
@@ -59,7 +71,7 @@ describe("getService", async () => {
 
   it("calls the health endpoint", () => {
     expect(consul.requests[0].url).to.equal(
-      "/v1/health/service/foo?passing=1&near=agent"
+      "/v1/health/service/nginx-stats?passing=1&near=agent"
     );
   });
 
@@ -69,20 +81,31 @@ describe("getService", async () => {
   });
 
   it("cycles through all registered services when asked again", async () => {
-    let result = await client.getService("foo");
+    let result = await client.getService(ServiceName);
     expect(result.address).to.equal("10.0.0.2");
     expect(result.port).to.equal("2345");
 
-    result = await client.getService("foo");
+    result = await client.getService(ServiceName);
     expect(result.address).to.equal("10.0.0.1");
 
-    result = await client.getService("foo");
+    result = await client.getService(ServiceName);
     expect(result.address).to.equal("10.0.0.2");
+  });
+
+  it("raises a 'change' event", () => {
+    expect(events).to.have.length(1);
+  });
+
+  it("includes the service descriptor", () => {
+    const [descriptor] = events;
+    expect(descriptor.service).to.equal(ServiceName);
   });
 });
 
 describe("When the server returns X-Consul-Index", () => {
   const consul = new FakeConsul();
+  const events = [];
+  const results = [];
 
   consul.addResponse({
     body: JSON.stringify([{ Service: { Address: "server-1", Port: "1" } }]),
@@ -95,16 +118,38 @@ describe("When the server returns X-Consul-Index", () => {
   });
 
   consul.addResponse({
+    body: JSON.stringify([{ Service: { Address: "server-3", Port: "3" } }]),
+    index: 3
+  });
+
+  consul.addResponse({
     body: JSON.stringify([{ Service: { Address: "server-3", Port: "3" } }])
   });
 
   before(async () => {
     await consul.start(0);
-    client = new Disconsulate(consul.getAddress());
-    result = await client.getService("foo");
+    const client = new Disconsulate(consul.getAddress());
+    const eventWaiter = new Promise((res, rej) => {
+      client.on("change", e => {
+        events.push(e);
+        results.push(e.next());
+        if (events.length == 3) {
+          res();
+        }
+      });
+    });
+    await client.getService("foo");
+    await eventWaiter;
   });
 
+  it("should make three requests to the server", () => {
+    expect(events.length).to.equal(3);
+  });
 
+  it("should include the index when calling for updates", () => {
+    expect(consul.requests[1].url).endsWith("&index=1");
+    expect(consul.requests[2].url).endsWith("&index=2");
+  });
 });
 
 describe("When specifying additional options", () => {
@@ -318,16 +363,15 @@ describe("When we receive no services", async () => {
 
 describe("isequal", () => {
   let a = new Set([
-    {address: "foo", port: 1234},
-    {address: "bar", port: 3456},
-    {address: "baz", port: 7890},
+    { address: "foo", port: 1234 },
+    { address: "bar", port: 3456 },
+    { address: "baz", port: 7890 }
   ]);
 
-
   let b = new Set([
-    {address: "bar", port: 3456},
-    {address: "baz", port: 7890},
-    {address: "foo", port: 1234},
+    { address: "bar", port: 3456 },
+    { address: "baz", port: 7890 },
+    { address: "foo", port: 1234 }
   ]);
 
   it("Should have set equality for objects", () => {
