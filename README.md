@@ -62,8 +62,27 @@ Start watching a service, and return a registered address and port.
 
 * `name`: the service name as registered with Consul.
 * `options`: an object with the following properties
-** `dc`: the datacentre to search for registered services.
-** `tags`: an array of that must be registered on an instance, used for filtering the registered addresses.
-** `node`: an object of key/value pairs that will be used to filter by node metadata.
+  * `dc`: the datacentre to search for registered services.
+  * `tags`: an array of that must be registered on an instance, used for filtering the registered addresses.
+  * `node`: an object of key/value pairs that will be used to filter by node metadata.
 
 Returns a promise of a service instance `{ address: string, port: string }`
+
+Disconsulate's `getService` method is able to watch multiple configurations for the same service. In the following example, we set up three separate caches which can update individually.
+
+```js
+const client = new Disconsulate();
+
+const live = client.getService("payment-api", {
+   tags: ["live"]
+});
+
+const dev = client.getService("payment-api", {
+   tags: ["dev"]
+});
+
+const europe = client.getService("payment-api", {
+   tags: ["live"],
+   dc: "eu-west-1"
+});
+```
