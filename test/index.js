@@ -1,7 +1,7 @@
 const isequal = require("lodash.isequal");
 const { expect, fail } = require("code");
 const Lab = require("lab");
-const { after, before, describe, it } = (exports.lab = Lab.script());
+const { after, before, describe, it, afterEach } = (exports.lab = Lab.script());
 
 const Http = require("http");
 const Disconsulate = require("../");
@@ -152,6 +152,8 @@ describe("When the server returns X-Consul-Index", () => {
   });
 });
 
+describe("When the index changes but nodes remain the same", () => {});
+
 describe("When specifying additional options", () => {
   const consul = new FakeConsul();
   consul.addResponse({
@@ -204,34 +206,29 @@ describe("When specifying node metadata", () => {
   });
 });
 
-describe("When using environment variables", async () => {
-  let request = null;
-
-  const server = Http.createServer((req, res) => {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    request = req;
-    res.end(
-      JSON.stringify([{ Service: { Address: "configured.com", Port: "1234" } }])
-    );
-  });
-
-  before(async () => {
-    await server.listen(0);
-    process.env.CONSUL_ADDR = `http://localhost:${server.address().port}`;
-    const client = new Disconsulate();
-    await client.getService("bar");
-  });
-
-  after(async () => {
+describe("When no consul addr is provided", () => {
+  afterEach(() => {
     delete process.env.CONSUL_ADDR;
+    delete process.env.CONSUL_HOST;
+    delete process.env.CONSUL_PORT;
   });
 
-  it("calls the configured endpoint", () => {
-    expect(request).to.not.be.null();
+  it("uses the CONSUL_ADDR var if available", () => {
+    process.env.CONSUL_ADDR = "http://foo.com:999";
+    const client = new Disconsulate();
+    expect(client.consulAddr).to.equal("http://foo.com:999");
   });
 
-  it("calls the health endpoint", () => {
-    expect(request.url).to.startWith("/v1/health/service/bar");
+  it("uses the CONSUL_HOST and CONSUL_PORT vars if available", () => {
+    process.env.CONSUL_HOST = "bar.net";
+    process.env.CONSUL_PORT = "8172";
+    const client = new Disconsulate();
+    expect(client.consulAddr).to.equal("http://bar.net:8172");
+  });
+
+  it("defaults to consul:8500", () => {
+    const client = new Disconsulate();
+    expect(client.consulAddr).to.equal("http://consul:8500");
   });
 });
 
