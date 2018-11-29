@@ -1,3 +1,4 @@
+const isequal = require("lodash.isequal");
 const { expect, fail } = require("code");
 const Lab = require("lab");
 const { after, before, describe, it } = (exports.lab = Lab.script());
@@ -63,30 +64,53 @@ describe("getService", async () => {
   });
 
   it("returns the first of the registered services", () => {
-    expect(result.Address).to.equal("10.0.0.1");
-    expect(result.Port).to.equal("1234");
+    expect(result.address).to.equal("10.0.0.1");
+    expect(result.port).to.equal("1234");
   });
 
   it("cycles through all registered services when asked again", async () => {
     let result = await client.getService("foo");
-    expect(result.Address).to.equal("10.0.0.2");
-    expect(result.Port).to.equal("2345");
+    expect(result.address).to.equal("10.0.0.2");
+    expect(result.port).to.equal("2345");
 
     result = await client.getService("foo");
-    expect(result.Address).to.equal("10.0.0.1");
+    expect(result.address).to.equal("10.0.0.1");
 
     result = await client.getService("foo");
-    expect(result.Address).to.equal("10.0.0.2");
+    expect(result.address).to.equal("10.0.0.2");
   });
 });
 
-describe("When the server returns X-Consul-Index", () => {});
+describe("When the server returns X-Consul-Index", () => {
+  const consul = new FakeConsul();
+
+  consul.addResponse({
+    body: JSON.stringify([{ Service: { Address: "server-1", Port: "1" } }]),
+    index: 1
+  });
+
+  consul.addResponse({
+    body: JSON.stringify([{ Service: { Address: "server-2", Port: "2" } }]),
+    index: 2
+  });
+
+  consul.addResponse({
+    body: JSON.stringify([{ Service: { Address: "server-3", Port: "3" } }])
+  });
+
+  before(async () => {
+    await consul.start(0);
+    client = new Disconsulate(consul.getAddress());
+    result = await client.getService("foo");
+  });
+
+
+});
 
 describe("When specifying additional options", () => {
-
   const consul = new FakeConsul();
   consul.addResponse({
-    body: JSON.stringify([{ Service: { Address: "10.0.0.1", Port: "1234" } }])
+    body: JSON.stringify([{ Service: { address: "10.0.0.1", port: "1234" } }])
   });
 
   before(async () => {
@@ -175,7 +199,7 @@ describe("When the response is large", () => {
       data.push({
         Service: {
           Address: "machine-" + i,
-          port: i
+          Port: i
         }
       });
     }
@@ -259,7 +283,7 @@ describe("When there is no server", () => {
   let request = null;
 
   it("propagates the error", async () => {
-    const client = new Disconsulate("http://203.0.113.0");
+    const client = new Disconsulate("http://consul.invalid");
 
     try {
       const value = await client.getService("some-service");
@@ -289,5 +313,24 @@ describe("When we receive no services", async () => {
       result = await client.getService("foo");
       fail("Expected failure but received result " + JSON.stringify(result));
     } catch (e) {}
+  });
+});
+
+describe("isequal", () => {
+  let a = new Set([
+    {address: "foo", port: 1234},
+    {address: "bar", port: 3456},
+    {address: "baz", port: 7890},
+  ]);
+
+
+  let b = new Set([
+    {address: "bar", port: 3456},
+    {address: "baz", port: 7890},
+    {address: "foo", port: 1234},
+  ]);
+
+  it("Should have set equality for objects", () => {
+    expect(isequal(a, b)).to.be.true();
   });
 });

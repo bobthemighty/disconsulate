@@ -24,7 +24,9 @@
     "url": "https://github.com/bobthemighty/disconsulate/issues"
   },
   "homepage": "https://github.com/bobthemighty/disconsulate#readme",
-  "dependencies": {},
+  "dependencies": {
+    "lodash.isequal": "^4.5.0"
+  },
   "devDependencies": {
     "code": "^5.2.4",
     "eslint-config-prettier": "^3.3.0",
