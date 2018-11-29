@@ -358,20 +358,85 @@ describe("When we receive no services", async () => {
   });
 });
 
-describe("isequal", () => {
-  let a = new Set([
-    { address: "foo", port: 1234 },
-    { address: "bar", port: 3456 },
-    { address: "baz", port: 7890 }
-  ]);
+describe("When the set of services doesn't change", () => {
+  const consul = new FakeConsul();
+  const events = [];
+  const results = [];
 
-  let b = new Set([
-    { address: "bar", port: 3456 },
-    { address: "baz", port: 7890 },
-    { address: "foo", port: 1234 }
-  ]);
+  // First we return two services
+  consul.addResponse({
+    body: JSON.stringify([
+      { Service: { Address: "server-1", Port: "1" } },
+      { Service: { Address: "server-2", Port: "2" } }
+    ]),
+    index: 1
+  });
 
-  it("Should have set equality for objects", () => {
-    expect(isequal(a, b)).to.be.true();
+  // Then the same services in the opposite order
+  consul.addResponse({
+    body: JSON.stringify([
+      { Service: { Address: "server-2", Port: "2" } },
+      { Service: { Address: "server-1", Port: "1" } }
+    ]),
+    index: 2
+  });
+
+  // Then the same services again
+  consul.addResponse({
+    body: JSON.stringify([
+      { Service: { Address: "server-2", Port: "2" } },
+      { Service: { Address: "server-1", Port: "1" } }
+    ]),
+    index: 3
+  });
+
+  // Then a subset of the original services
+  consul.addResponse({
+    body: JSON.stringify([{ Service: { Address: "server-1", Port: "1" } }]),
+    index: 4
+  });
+
+  // and lastly a new service
+  consul.addResponse({
+    body: JSON.stringify([{ Service: { Address: "server-3", Port: "3" } }])
+  });
+
+  before(async () => {
+    await consul.start(0);
+    const client = new Disconsulate(consul.getAddress());
+    const eventWaiter = new Promise((res, rej) => {
+      client.on("change", e => {
+        events.push(e.nodes.slice(0));
+        if (events.length == 3) {
+          res();
+        }
+      });
+    });
+    await client.getService("foo");
+    await eventWaiter;
+  });
+
+  it("should make five requests to the server", () => {
+    expect(consul.requests.length).to.equal(5);
+  });
+
+  it("should only raise 'change' when the set of services changes", () => {
+    expect(events).to.have.length(3);
+  });
+
+  it("should raise for the first set of services", () => {
+    const [s1, s2] = events[0];
+    expect(s1.address).to.equal("server-1");
+    expect(s2.address).to.equal("server-2");
+  });
+
+  it("should raise for the subset", () => {
+    const [s1] = events[1];
+    expect(s1.address).to.equal("server-1");
+  });
+
+  it("should raise for the new service", () => {
+    const [s1] = events[2];
+    expect(s1.address).to.equal("server-3");
   });
 });
