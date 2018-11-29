@@ -3,7 +3,9 @@
   "version": "1.1.1",
   "description": "A tiny load-balancing service discovery tool for Consul.",
   "main": "lib/index.js",
-  "engines": ">=8.0.0",
+  "engines": {
+     "node": ">=8.0.0"
+  },
   "scripts": {
     "test": "lab",
     "lint": "prettier"
