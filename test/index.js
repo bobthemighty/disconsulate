@@ -327,7 +327,7 @@ describe("When there is no server", () => {
   let request = null;
 
   it("propagates the error", async () => {
-    const client = new Disconsulate("http://consul.invalid");
+    const client = new Disconsulate("http://localhost:0");
 
     try {
       const value = await client.getService("some-service");
