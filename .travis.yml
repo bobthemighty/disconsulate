@@ -6,7 +6,7 @@ sudo: false
 deploy:
   provider: npm
   email: "bob@codefiend.co.uk"
-  tag: next
+  tag: latest
   on:
     tags: true
   api_key:
