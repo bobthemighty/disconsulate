@@ -42,6 +42,30 @@ class FakeConsul {
   }
 }
 
+class TestLogger {
+  constructor() {
+    this.debugs = [];
+    this.infos = [];
+    this.errors = [];
+    this.fatals = [];
+  }
+  debug(m) {
+    this.debugs.push(m);
+  }
+
+  info(m) {
+    this.infos.push(m);
+  }
+
+  error(m) {
+    this.errors.push(m);
+  }
+
+  fatal(m) {
+    this.fatals.push(m);
+  }
+}
+
 describe("getService", async () => {
   let request = null;
   let result = null;
@@ -269,15 +293,16 @@ describe("When the response is large", () => {
 
 describe("When the server fails with error text", () => {
   const consul = new FakeConsul();
+  let client;
+
   consul.addResponse({ statusCode: 500, body: "That didn't work" });
 
   before(async () => {
     await consul.start();
+    client = new TestClient(consul.getAddress());
   });
 
   it("propagates the error", async () => {
-    const client = new Disconsulate(consul.getAddress());
-
     try {
       const value = await client.getService("some-service");
       fail("Expected an error, but received value: " + JSON.stringify(result));
@@ -287,6 +312,10 @@ describe("When the server fails with error text", () => {
       );
     }
   });
+
+  it("logs the error", () => {
+    expect(client.logger.errors).to.have.length(1);
+  })
 });
 
 describe("When the server fails", () => {
@@ -353,6 +382,9 @@ describe("When we receive no services", async () => {
 
 class TestClient {
   constructor(address, expected, options) {
+    options = options || {};
+    this.logger = new TestLogger();
+    options.logger = this.logger;
     this.client = new Disconsulate(address, options);
     this.results = [];
     this.errors = [];
@@ -367,7 +399,9 @@ class TestClient {
       this.errors.push(e);
     });
 
-    this.client.on("fail", () => { this.failed = true; });
+    this.client.on("fail", () => {
+      this.failed = true;
+    });
   }
 
   async getService(service, opts) {
@@ -391,7 +425,7 @@ class TestClient {
 
   nextError() {
     return new Promise((resolve, reject) => {
-      this.client.once("error", resolve)
+      this.client.once("error", resolve);
     });
   }
 }
@@ -408,7 +442,7 @@ describe("When we receive an HTTP error from a watch request", async () => {
   for (let i = 0; i < 10; i++) {
     consul.addResponse({
       statusCode: 502,
-      body: "That's not what we want to happen AT ALL!!! ("+i+")"
+      body: "That's not what we want to happen AT ALL!!! (" + i + ")"
     });
   }
 
@@ -434,7 +468,6 @@ describe("When we receive an HTTP error from a watch request", async () => {
   after(async () => {
     await zurvan.releaseTimers();
   });
-
 
   it("should raise 'error'", () => {
     expect(client.errors).to.have.length(1);
@@ -478,7 +511,7 @@ describe("When we exceed the max retries", async () => {
   for (let i = 0; i < 10; i++) {
     consul.addResponse({
       statusCode: 502,
-      body: "That's not what we want to happen AT ALL!!! ("+i+")"
+      body: "That's not what we want to happen AT ALL!!! (" + i + ")"
     });
   }
 
@@ -499,7 +532,6 @@ describe("When we exceed the max retries", async () => {
   after(async () => {
     await zurvan.releaseTimers();
   });
-
 
   it("should raise 'error'", () => {
     expect(client.errors).to.have.length(1);
@@ -527,6 +559,7 @@ describe("When we exceed the max retries", async () => {
     expect(client.failed).to.be.true();
   });
 });
+
 describe("When the set of services doesn't change", () => {
   const consul = new FakeConsul();
   const events = [];

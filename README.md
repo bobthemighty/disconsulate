@@ -45,16 +45,61 @@ async function fetch_database() {
 }
 ```
 
+## Retrying & Error Handling
+
+When you first request a service, disconsulate will have nothing in its cache, and will fetch the latest data from Consul.
+
+```js
+async function fetchService() {
+   const client = new Disconsulate();
+   try {
+     const db = await client.getService("database");
+   } catch (e) {
+     console.log("Failed to fetch service registration for database", e);
+   }
+}
+```
+
+Disconsulate will then keep its cache up to date using Consul's [blocking queries](). These queries happen in the background, automatically. If a refresh fails, Disconsulate will raise an event.
+
+```js
+function fetchApi(){
+   const client = new Disconsulate();
+   client.on("error", (e) => console.log("Failed to background refresh a service"));
+   return client.getService("api");
+}
+```
+
+By default, Disconsulate will try 20 times to refresh the service before giving up. You can set the retry policy when creating a client. If Disconsulate reaches the maxmum number of retries, it'll raise the "fail" event and stop retrying.
+
+```js
+async function fetchWeb(consulAddr){
+   const client = new Disconsulate(consulAddr, {
+     retry: {
+       maxTries: 3
+     }
+   });
+   client.on("fail", () => console.log("Reached maximum number of retries"));
+   await client.getService("web");
+}
+```
+
+
 ## API
 
-### new Disconsulate(options)
+### new Disconsulate([consul, options])
 
-Create a new instance of the Consulite class. `options` can include the following properties:
+Create a new instance of the Consulite class.
 
 * `consul` - consul host to connect to. Defaults to either:
   * `${process.env.CONSUL_ADDR}`
   * `${process.env.CONSUL_HOST}:${process.env.CONSUL_PORT}`
   * `consul:8500` - as a last resort
+* `options` - additional options for managing the connection to Consul:
+  * `retry`: an object describing the retry policy, comprising:
+    * `seedDelay`: The minimum time to wait before retrying a failed request (default: 100 ms)
+    * `maxDelay`: The maximum delay to wait between retries (default 30,000 millisecs)
+    * `maxRetries`: The maximum number of times to retry a failed request (default: 20)
 
 ### getService(name, [options]) 
 
