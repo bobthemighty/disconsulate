@@ -291,6 +291,29 @@ describe("When the response is large", () => {
   });
 });
 
+describe("When the response is empty", () => {
+  let client;
+  const consul = new FakeConsul();
+
+  const data = [];
+
+  consul.addResponse({ body: JSON.stringify(data) });
+
+  before(async () => {
+    await consul.start();
+    client = new Disconsulate(consul.getAddress());
+  });
+
+  it("raises an error", async () => {
+    try {
+      result = await client.getService("baz");
+      fail("Expected error");
+    } catch (e) {
+      expect(e.message).to.equal("No nodes found for service 'baz'");
+    }
+  });
+});
+
 describe("When the server fails with error text", () => {
   const consul = new FakeConsul();
   let client;
@@ -315,7 +338,7 @@ describe("When the server fails with error text", () => {
 
   it("logs the error", () => {
     expect(client.logger.errors).to.have.length(1);
-  })
+  });
 });
 
 describe("When the server fails", () => {
