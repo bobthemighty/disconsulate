@@ -60,7 +60,7 @@ async function fetchService() {
 }
 ```
 
-Disconsulate will then keep its cache up to date using Consul's [blocking queries](). These queries happen in the background, automatically. If a refresh fails, Disconsulate will raise an event.
+Disconsulate will then keep its cache up to date using Consul's [blocking queries](https://www.consul.io/api/index.html#blocking-queries). These queries happen in the background, automatically. If a refresh fails, Disconsulate will raise an event.
 
 ```js
 function fetchApi(){
