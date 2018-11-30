@@ -84,6 +84,21 @@ async function fetchWeb(consulAddr){
 }
 ```
 
+## Logging
+
+Disconsulate ships with a stub logger that logs error details to the console. You can pass your own logger to the client. A logger is any object that has the following methods:
+
+* debug (str)
+* info (str)
+* error (str)
+* fatal (str)
+
+```js
+function findDatabase() {
+  const client = new Disconsulate({
+  });
+}
+```
 
 ## API
 
@@ -100,6 +115,7 @@ Create a new instance of the Consulite class.
     * `seedDelay`: The minimum time to wait before retrying a failed request (default: 100 ms)
     * `maxDelay`: The maximum delay to wait between retries (default 30,000 millisecs)
     * `maxRetries`: The maximum number of times to retry a failed request (default: 20)
+  * `logger`: an object exposing debug, info, error, and fatal methods.
 
 ### getService(name, [options]) 
 
