@@ -3,6 +3,8 @@ const { expect, fail } = require("code");
 const Lab = require("lab");
 const { after, before, describe, it, afterEach } = (exports.lab = Lab.script());
 
+const zurvan = require("zurvan");
+
 const Http = require("http");
 const Disconsulate = require("../");
 
@@ -180,19 +182,16 @@ describe("When specifying additional options", () => {
 
 describe("When specifying node metadata", () => {
   let request = null;
-
-  const server = Http.createServer((req, res) => {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    request = req;
-    res.end(
-      JSON.stringify([{ Service: { Address: "configured.com", Port: "1234" } }])
-    );
+  const consul = new FakeConsul();
+  consul.addResponse({
+    body: JSON.stringify([
+      { Service: { Address: "configured.com", Port: "1234" } }
+    ])
   });
 
   before(async () => {
-    await server.listen(0);
-    process.env.CONSUL_ADDR = `http://localhost:${server.address().port}`;
-    const client = new Disconsulate();
+    await consul.start();
+    const client = new Disconsulate(consul.getAddress());
     await client.getService("baz", {
       node: {
         availabilityZone: "A",
@@ -202,7 +201,7 @@ describe("When specifying node metadata", () => {
   });
 
   it("calls the health endpoint", () => {
-    expect(request.url).to.equal(
+    expect(consul.requests[0].url).to.equal(
       "/v1/health/service/baz?passing=1&near=agent&node-meta=availabilityZone:A&node-meta=type:t2.micro"
     );
   });
@@ -235,29 +234,25 @@ describe("When no consul addr is provided", () => {
 });
 
 describe("When the response is large", () => {
-  let request = null;
+  let result;
+  const consul = new FakeConsul();
 
-  const server = Http.createServer((req, res) => {
-    let data = [];
-    for (let i = 0; i < 10000; i++) {
-      data.push({
-        Service: {
-          Address: "machine-" + i,
-          Port: i
-        }
-      });
-    }
-    res.writeHead(200, { "Content-Type": "application/json" });
-    request = req;
-    res.end(JSON.stringify(data));
-  });
+  const data = [];
+  for (let i = 0; i < 10000; i++) {
+    data.push({
+      Service: {
+        Address: "machine-" + i,
+        Port: i
+      }
+    });
+  }
+
+  consul.addResponse({ body: JSON.stringify(data) });
 
   before(async () => {
-    await server.listen(0);
-    const client = new Disconsulate(
-      `http://localhost:${server.address().port}`
-    );
-    await client.getService("baz", {
+    await consul.start();
+    const client = new Disconsulate(consul.getAddress());
+    result = await client.getService("baz", {
       node: {
         availabilityZone: "A",
         type: "t2.micro"
@@ -266,26 +261,22 @@ describe("When the response is large", () => {
   });
 
   it("calls the health endpoint", () => {
-    expect(request.url).to.equal(
+    expect(consul.requests[0].url).to.equal(
       "/v1/health/service/baz?passing=1&near=agent&node-meta=availabilityZone:A&node-meta=type:t2.micro"
     );
   });
 });
 
 describe("When the server fails with error text", () => {
-  const server = Http.createServer((req, res) => {
-    res.writeHead(500, { "Content-Type": "application/json" });
-    res.end("That didn't work");
-  });
+  const consul = new FakeConsul();
+  consul.addResponse({ statusCode: 500, body: "That didn't work" });
 
   before(async () => {
-    await server.listen(0);
+    await consul.start();
   });
 
   it("propagates the error", async () => {
-    const client = new Disconsulate(
-      `http://localhost:${server.address().port}`
-    );
+    const client = new Disconsulate(consul.getAddress());
 
     try {
       const value = await client.getService("some-service");
@@ -360,10 +351,105 @@ describe("When we receive no services", async () => {
   });
 });
 
+class TestClient {
+  constructor(address, expected) {
+    this.client = new Disconsulate(address);
+    this.results = [];
+    this.errors = [];
+    this.expected = expected;
+
+    this.client.on("change", e => {
+      this.results.push(e.nodes.slice(0));
+    });
+
+    this.client.on("error", e => {
+      this.errors.push(e);
+    });
+  }
+
+  async getService(service, opts) {
+    const result = await this.client.getService(service, opts);
+    return result;
+  }
+
+  done() {
+    return new Promise((resolve, reject) => {
+      if (this.results.length >= this.expected) {
+        console.log(this.results.length);
+        resolve();
+      }
+      this.client.on("change", () => {
+        if (this.results.length >= this.expected) {
+          resolve();
+        }
+      });
+    });
+  }
+
+  nextError() {
+    return new Promise((resolve, reject) => {
+      this.client.on("error", resolve)
+    });
+  }
+}
+
+describe("When we receive an HTTP error from a watch request", async () => {
+  const consul = new FakeConsul();
+  let client;
+
+  consul.addResponse({
+    body: JSON.stringify([{ Service: { Address: "server-1", Port: "1" } }]),
+    index: 1
+  });
+
+  for (let i = 0; i < 10; i++) {
+    consul.addResponse({
+      statusCode: 502,
+      body: "That's not what we want to happen AT ALL!!!"
+    });
+  }
+
+  consul.addResponse({
+    body: JSON.stringify([{ Service: { Address: "server-2", Port: "2" } }])
+  });
+
+  before(async () => {
+    await zurvan.interceptTimers();
+    await consul.start();
+    client = new TestClient(consul.getAddress(), 2);
+    await client.getService("foo");
+
+    await client.nextError();
+  });
+
+  after(async () => {
+    await zurvan.releaseTimers();
+  });
+
+
+  it("should raise 'error'", () => {
+    expect(client.errors).to.have.length(1);
+  });
+
+  it("should have fetched the first result", () => {
+    expect(client.results).to.have.length(1);
+  });
+
+  it("should retry every 30 seconds", async () => {
+    await zurvan.advanceTime(32000);
+    await client.nextError();
+    expect(client.errors).to.have.length(2);
+
+    await zurvan.advanceTime(30000);
+    await client.nextError();
+    expect(client.errors).to.have.length(3);
+
+  });
+});
+
 describe("When the set of services doesn't change", () => {
   const consul = new FakeConsul();
   const events = [];
-  const results = [];
 
   // First we return two services
   consul.addResponse({
@@ -404,7 +490,7 @@ describe("When the set of services doesn't change", () => {
   });
 
   before(async () => {
-    await consul.start(0);
+    await consul.start();
     const client = new Disconsulate(consul.getAddress());
     const eventWaiter = new Promise((res, rej) => {
       client.on("change", e => {

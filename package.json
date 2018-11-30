@@ -35,7 +35,8 @@
     "eslint-config-prettier": "^3.3.0",
     "eslint-plugin-prettier": "^3.0.0",
     "lab": "^18.0.0",
-    "prettier-eslint": "^8.8.2"
+    "prettier-eslint": "^8.8.2",
+    "zurvan": "^0.5.2"
   },
   "files": [
     "lib/"
