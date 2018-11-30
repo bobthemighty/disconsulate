@@ -352,10 +352,11 @@ describe("When we receive no services", async () => {
 });
 
 class TestClient {
-  constructor(address, expected) {
-    this.client = new Disconsulate(address);
+  constructor(address, expected, options) {
+    this.client = new Disconsulate(address, options);
     this.results = [];
     this.errors = [];
+    this.failed = false;
     this.expected = expected;
 
     this.client.on("change", e => {
@@ -365,6 +366,8 @@ class TestClient {
     this.client.on("error", e => {
       this.errors.push(e);
     });
+
+    this.client.on("fail", () => { this.failed = true; });
   }
 
   async getService(service, opts) {
@@ -388,7 +391,7 @@ class TestClient {
 
   nextError() {
     return new Promise((resolve, reject) => {
-      this.client.on("error", resolve)
+      this.client.once("error", resolve)
     });
   }
 }
@@ -405,7 +408,7 @@ describe("When we receive an HTTP error from a watch request", async () => {
   for (let i = 0; i < 10; i++) {
     consul.addResponse({
       statusCode: 502,
-      body: "That's not what we want to happen AT ALL!!!"
+      body: "That's not what we want to happen AT ALL!!! ("+i+")"
     });
   }
 
@@ -416,7 +419,13 @@ describe("When we receive an HTTP error from a watch request", async () => {
   before(async () => {
     await zurvan.interceptTimers();
     await consul.start();
-    client = new TestClient(consul.getAddress(), 2);
+    client = new TestClient(consul.getAddress(), 2, {
+      retry: {
+        seedDelay: 100,
+        maxDelay: 2000,
+        maxTries: 50
+      }
+    });
     await client.getService("foo");
 
     await client.nextError();
@@ -435,18 +444,89 @@ describe("When we receive an HTTP error from a watch request", async () => {
     expect(client.results).to.have.length(1);
   });
 
-  it("should retry every 30 seconds", async () => {
-    await zurvan.advanceTime(32000);
+  it("should retry within 2 seconds", async () => {
+    await zurvan.advanceTime(2000);
     await client.nextError();
     expect(client.errors).to.have.length(2);
+  });
 
-    await zurvan.advanceTime(30000);
-    await client.nextError();
-    expect(client.errors).to.have.length(3);
+  it("should retry 10 times in total", async () => {
+    for (let i = 2; i <= 10; i++) {
+      await zurvan.advanceTime(2000);
+      if (i <= 9) {
+        await client.nextError();
+      }
+    }
+    await client.done();
+    expect(client.errors).to.have.length(10);
+  });
 
+  it("should have fetched the second result", () => {
+    expect(client.results).to.have.length(2);
   });
 });
 
+describe("When we exceed the max retries", async () => {
+  const consul = new FakeConsul();
+  let client;
+
+  consul.addResponse({
+    body: JSON.stringify([{ Service: { Address: "server-1", Port: "1" } }]),
+    index: 1
+  });
+
+  for (let i = 0; i < 10; i++) {
+    consul.addResponse({
+      statusCode: 502,
+      body: "That's not what we want to happen AT ALL!!! ("+i+")"
+    });
+  }
+
+  before(async () => {
+    await zurvan.interceptTimers();
+    await consul.start();
+    client = new TestClient(consul.getAddress(), 2, {
+      retry: {
+        seedDelay: 1000,
+        maxDelay: 5000,
+        maxTries: 5
+      }
+    });
+    await client.getService("foo");
+    await client.nextError();
+  });
+
+  after(async () => {
+    await zurvan.releaseTimers();
+  });
+
+
+  it("should raise 'error'", () => {
+    expect(client.errors).to.have.length(1);
+  });
+
+  it("should have fetched the first result", () => {
+    expect(client.results).to.have.length(1);
+  });
+
+  it("should before 3 seconds", async () => {
+    await zurvan.advanceTime(3000);
+    await client.nextError();
+    expect(client.errors).to.have.length(2);
+  });
+
+  it("should retry 5 times in total", async () => {
+    for (let i = 2; i <= 5; i++) {
+      await zurvan.advanceTime(5000);
+      await client.nextError();
+    }
+    expect(client.errors).to.have.length(5 + 1);
+  });
+
+  it("should have raised fail", () => {
+    expect(client.failed).to.be.true();
+  });
+});
 describe("When the set of services doesn't change", () => {
   const consul = new FakeConsul();
   const events = [];
