@@ -47,7 +47,7 @@ async function fetch_database() {
 
 ## Retrying & Error Handling
 
-When you first request a service, disconsulate will have nothing in its cache, and will fetch the latest data from Consul.
+When you first request a service, disconsulate will have nothing in its cache, and will fetch the latest data from Consul. A failure at this point will return an error to the client.
 
 ```js
 async function fetchService() {
@@ -70,7 +70,7 @@ function fetchApi(){
 }
 ```
 
-By default, Disconsulate will try 20 times to refresh the service before giving up. You can set the retry policy when creating a client. If Disconsulate reaches the maxmum number of retries, it'll raise the "fail" event and stop retrying.
+By default, Disconsulate will try 20 times to refresh the service before giving up. You can set the retry policy when creating a client. If Disconsulate reaches the maximum number of retries, it'll raise the "fail" event and stop retrying.
 
 ```js
 async function fetchWeb(consulAddr){
