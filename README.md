@@ -94,8 +94,14 @@ Disconsulate ships with a stub logger that logs error details to the console. Yo
 * fatal (str)
 
 ```js
+
+import winston from 'winston';
+const logger = winston.createLogger();
+
+
 function findDatabase() {
   const client = new Disconsulate({
+     logger 
   });
 }
 ```
