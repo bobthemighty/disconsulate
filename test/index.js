@@ -66,11 +66,58 @@ class TestLogger {
   }
 }
 
+class TestClient {
+  constructor(address, expected, options) {
+    options = options || {};
+    this.logger = new TestLogger();
+    options.logger = this.logger;
+    this.client = new Disconsulate(address, options);
+    this.results = [];
+    this.errors = [];
+    this.failed = false;
+    this.expected = expected;
+
+    this.client.on("change", e => {
+      this.results.push(e.nodes.slice(0));
+    });
+
+    this.client.on("error", e => {
+      this.errors.push(e);
+    });
+
+    this.client.on("fail", () => {
+      this.failed = true;
+    });
+  }
+
+  async getService(service, opts) {
+    const result = await this.client.getService(service, opts);
+    return result;
+  }
+
+  done() {
+    return new Promise((resolve, reject) => {
+      if (this.results.length >= this.expected) {
+        console.log(this.results.length);
+        resolve();
+      }
+      this.client.on("change", () => {
+        if (this.results.length >= this.expected) {
+          resolve();
+        }
+      });
+    });
+  }
+
+  nextError() {
+    return new Promise((resolve, reject) => {
+      this.client.once("error", resolve);
+    });
+  }
+}
+
 describe("getService", async () => {
-  let request = null;
-  let result = null;
   let client = null;
-  let events = [];
 
   const ServiceName = "nginx-stats";
 
@@ -84,11 +131,8 @@ describe("getService", async () => {
 
   before(async () => {
     await consul.start(0);
-    client = new Disconsulate(consul.getAddress());
-    client.on("change", e => {
-      events.push(e);
-    });
-    result = await client.getService(ServiceName);
+    client = new TestClient(consul.getAddress());
+    await client.getService(ServiceName);
   });
 
   it("calls the configured address", () => {
@@ -102,6 +146,7 @@ describe("getService", async () => {
   });
 
   it("returns the first of the registered services", () => {
+    const [result] = client.results[0];
     expect(result.address).to.equal("10.0.0.1");
     expect(result.port).to.equal("1234");
     expect(result.tags).to.equal(["active"]);
@@ -119,21 +164,10 @@ describe("getService", async () => {
     result = await client.getService(ServiceName);
     expect(result.address).to.equal("10.0.0.2");
   });
-
-  it("raises a 'change' event", () => {
-    expect(events).to.have.length(1);
-  });
-
-  it("includes the service descriptor", () => {
-    const [descriptor] = events;
-    expect(descriptor.service).to.equal(ServiceName);
-  });
 });
 
 describe("When the server returns X-Consul-Index", () => {
   const consul = new FakeConsul();
-  const events = [];
-  const results = [];
 
   consul.addResponse({
     body: JSON.stringify([{ Service: { Address: "server-1", Port: "1" } }]),
@@ -156,22 +190,13 @@ describe("When the server returns X-Consul-Index", () => {
 
   before(async () => {
     await consul.start(0);
-    const client = new Disconsulate(consul.getAddress());
-    const eventWaiter = new Promise((res, rej) => {
-      client.on("change", e => {
-        events.push(e);
-        results.push(e.next());
-        if (events.length == 3) {
-          res();
-        }
-      });
-    });
+    const client = new TestClient(consul.getAddress(), 3);
     await client.getService("foo");
-    await eventWaiter;
+    await client.done();
   });
 
   it("should make three requests to the server", () => {
-    expect(events.length).to.equal(3);
+    expect(consul.requests.length).to.equal(3);
   });
 
   it("should include the index when calling for updates", () => {
@@ -190,7 +215,7 @@ describe("When specifying additional options", () => {
 
   before(async () => {
     await consul.start();
-    const client = new Disconsulate(consul.getAddress());
+    const client = new TestClient(consul.getAddress());
     await client.getService("baz", {
       tags: ["active", "release-123"],
       dc: "eu-west-1"
@@ -215,7 +240,7 @@ describe("When specifying node metadata", () => {
 
   before(async () => {
     await consul.start();
-    const client = new Disconsulate(consul.getAddress());
+    const client = new TestClient(consul.getAddress());
     await client.getService("baz", {
       node: {
         availabilityZone: "A",
@@ -275,7 +300,7 @@ describe("When the response is large", () => {
 
   before(async () => {
     await consul.start();
-    const client = new Disconsulate(consul.getAddress());
+    const client = new TestClient(consul.getAddress());
     result = await client.getService("baz", {
       node: {
         availabilityZone: "A",
@@ -301,7 +326,7 @@ describe("When the response is empty", () => {
 
   before(async () => {
     await consul.start();
-    client = new Disconsulate(consul.getAddress());
+    client = new TestClient(consul.getAddress());
   });
 
   it("raises an error", async () => {
@@ -355,9 +380,7 @@ describe("When the server fails", () => {
   });
 
   it("propagates the error", async () => {
-    const client = new Disconsulate(
-      `http://localhost:${server.address().port}`
-    );
+    const client = new TestClient(`http://localhost:${server.address().port}`);
 
     try {
       const value = await client.getService("some-service");
@@ -370,7 +393,7 @@ describe("When there is no server", () => {
   let request = null;
 
   it("propagates the error", async () => {
-    const client = new Disconsulate("http://localhost:0");
+    const client = new TestClient("http://localhost:0");
 
     try {
       const value = await client.getService("some-service");
@@ -383,16 +406,12 @@ describe("When we receive no services", async () => {
   let request = null;
   let result = null;
   let client = null;
-
-  const server = Http.createServer((req, res) => {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    request = req;
-    res.end("[]");
-  });
+  const consul = new FakeConsul();
+  consul.addResponse({ body: "[]" });
 
   before(async () => {
-    await server.listen(0);
-    client = new Disconsulate(`http://localhost:${server.address().port}`);
+    await consul.start();
+    client = new TestClient(consul.getAddress());
   });
 
   it("Fails with an error", async () => {
@@ -402,56 +421,6 @@ describe("When we receive no services", async () => {
     } catch (e) {}
   });
 });
-
-class TestClient {
-  constructor(address, expected, options) {
-    options = options || {};
-    this.logger = new TestLogger();
-    options.logger = this.logger;
-    this.client = new Disconsulate(address, options);
-    this.results = [];
-    this.errors = [];
-    this.failed = false;
-    this.expected = expected;
-
-    this.client.on("change", e => {
-      this.results.push(e.nodes.slice(0));
-    });
-
-    this.client.on("error", e => {
-      this.errors.push(e);
-    });
-
-    this.client.on("fail", () => {
-      this.failed = true;
-    });
-  }
-
-  async getService(service, opts) {
-    const result = await this.client.getService(service, opts);
-    return result;
-  }
-
-  done() {
-    return new Promise((resolve, reject) => {
-      if (this.results.length >= this.expected) {
-        console.log(this.results.length);
-        resolve();
-      }
-      this.client.on("change", () => {
-        if (this.results.length >= this.expected) {
-          resolve();
-        }
-      });
-    });
-  }
-
-  nextError() {
-    return new Promise((resolve, reject) => {
-      this.client.once("error", resolve);
-    });
-  }
-}
 
 describe("When we receive an HTTP error from a watch request", async () => {
   const consul = new FakeConsul();
@@ -585,7 +554,7 @@ describe("When we exceed the max retries", async () => {
 
 describe("When the set of services doesn't change", () => {
   const consul = new FakeConsul();
-  const events = [];
+  let client;
 
   // First we return two services
   consul.addResponse({
@@ -627,17 +596,9 @@ describe("When the set of services doesn't change", () => {
 
   before(async () => {
     await consul.start();
-    const client = new Disconsulate(consul.getAddress());
-    const eventWaiter = new Promise((res, rej) => {
-      client.on("change", e => {
-        events.push(e.nodes.slice(0));
-        if (events.length == 3) {
-          res();
-        }
-      });
-    });
+    client = new TestClient(consul.getAddress(), 3);
     await client.getService("foo");
-    await eventWaiter;
+    await client.done();
   });
 
   it("should make five requests to the server", () => {
@@ -645,22 +606,22 @@ describe("When the set of services doesn't change", () => {
   });
 
   it("should only raise 'change' when the set of services changes", () => {
-    expect(events).to.have.length(3);
+    expect(client.results).to.have.length(3);
   });
 
   it("should raise for the first set of services", () => {
-    const [s1, s2] = events[0];
+    const [s1, s2] = client.results[0];
     expect(s1.address).to.equal("server-1");
     expect(s2.address).to.equal("server-2");
   });
 
   it("should raise for the subset", () => {
-    const [s1] = events[1];
+    const [s1] = client.results[1];
     expect(s1.address).to.equal("server-1");
   });
 
   it("should raise for the new service", () => {
-    const [s1] = events[2];
+    const [s1] = client.results[2];
     expect(s1.address).to.equal("server-3");
   });
 });
