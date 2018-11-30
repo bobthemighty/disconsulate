@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test": "lab",
-    "lint": "prettier"
+    "lint": "prettier",
+    "test-cov": "lab -r lcov"
   },
   "repository": {
     "type": "git",
