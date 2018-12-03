@@ -1,6 +1,6 @@
 {
   "name": "disconsulate",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "A tiny load-balancing service discovery tool for Consul.",
   "main": "lib/index.js",
   "engines": {
