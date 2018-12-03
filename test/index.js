@@ -169,6 +169,47 @@ describe("getService", async () => {
   });
 });
 
+describe("When there is no service address", async () => {
+  let client = null;
+
+  const ServiceName = "nginx-stats";
+
+  const consul = new FakeConsul();
+  consul.addResponse({
+    body: JSON.stringify([
+      { Service: { Address: "", Port: "1234" }, Node: { Address: "127.0.0.1" } },
+      { Service: { Address: "10.0.0.2", Port: "2345" }, Node: { Address: "127.0.0.1" } }
+    ])
+  });
+
+  before(async () => {
+    await consul.start(0);
+    client = new TestClient(consul.getAddress());
+    await client.getService(ServiceName);
+  });
+
+  it("uses the node address if no service address is available", () => {
+    const [result] = client.results[0];
+    expect(result.address).to.equal("127.0.0.1");
+    expect(result.port).to.equal("1234");
+  });
+
+  it("prefers the service address where available", async () => {
+    let result = await client.getService(ServiceName);
+    expect(result.address).to.equal("10.0.0.2");
+    expect(result.port).to.equal("2345");
+
+    result = await client.getService(ServiceName);
+    expect(result.address).to.equal("127.0.0.1");
+
+    result = await client.getService(ServiceName);
+    expect(result.address).to.equal("10.0.0.2");
+  });
+});
+
+
+
+
 describe("When the server returns X-Consul-Index", () => {
   const consul = new FakeConsul();
 
@@ -213,7 +254,7 @@ describe("When the index changes but nodes remain the same", () => {});
 describe("When specifying additional options", () => {
   const consul = new FakeConsul();
   consul.addResponse({
-    body: JSON.stringify([{ Service: { address: "10.0.0.1", port: "1234" } }])
+    body: JSON.stringify([{ Service: { Address: "10.0.0.1", Port: "1234" } }])
   });
 
   before(async () => {
