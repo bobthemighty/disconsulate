@@ -68,10 +68,11 @@ class TestLogger {
 
 class TestClient {
   constructor(address, expected, options) {
-    options = options || {};
+    options = options || {consul: address};
+    options.consul = address;
     this.logger = new TestLogger();
     options.logger = this.logger;
-    this.client = new Disconsulate(address, options);
+    this.client = new Disconsulate(options);
     this.results = [];
     this.errors = [];
     this.failed = false;
@@ -326,7 +327,7 @@ describe("When the response is empty", () => {
 
   before(async () => {
     await consul.start();
-    client = new TestClient(consul.getAddress());
+    client = new Disconsulate(consul.getAddress());
   });
 
   it("raises an error", async () => {
@@ -446,6 +447,7 @@ describe("When we receive an HTTP error from a watch request", async () => {
     await zurvan.interceptTimers();
     await consul.start();
     client = new TestClient(consul.getAddress(), 2, {
+      consul: consul.getAddress(),
       retry: {
         seedDelay: 100,
         maxDelay: 2000,

@@ -132,29 +132,29 @@ const logger = winston.createLogger({ level: 'error'});
 
 function findDatabase() {
   const client = new Disconsulate({
-     logger 
+     logger
   });
 }
 ```
 
 ## API
 
-### new Disconsulate([consul, options])
+### new Disconsulate(options)
 
 Create a new instance of the Consulite class.
 
-* `consul` - consul host to connect to. Defaults to either:
-  * `${process.env.CONSUL_ADDR}`
-  * `${process.env.CONSUL_HOST}:${process.env.CONSUL_PORT}`
-  * `consul:8500` - as a last resort
-* `options` - additional options for managing the connection to Consul:
+* `options` - configuration options for managing the connection to Consul:
+  * `consul` - consul host to connect to. Defaults to either:
+    * `http://${process.env.CONSUL_ADDR}` or
+    * `http://${process.env.CONSUL_HOST}:${process.env.CONSUL_PORT}` or
+    * `http://consul:8500` - as a last resort
   * `retry`: an object describing the retry policy, comprising:
-    * `seedDelay`: The minimum time to wait before retrying a failed request (default: 100 ms)
-    * `maxDelay`: The maximum delay to wait between retries (default 30,000 millisecs)
-    * `maxRetries`: The maximum number of times to retry a failed request (default: 20)
+    * `seedWait`: The minimum time to wait before retrying a failed request (default: 100 ms)
+    * `maxWait`: The maximum delay to wait between retries (default 30,000 millisecs)
+    * `maxTries`: The maximum number of times to retry a failed request (default: 20)
   * `logger`: an object exposing debug, info, error, and fatal methods.
 
-### getService(name, [options]) 
+### getService(name, [options])
 
 Start watching a service, and return a registered address and port.
 
