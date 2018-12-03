@@ -20,9 +20,8 @@ import Disconsulate from 'disconsulate;'
 
 // Disconsulate uses async functions when talking to Consul.
 async function fetch_database() {
-  
   // Create a client by passing it the address of a consul server.
-  // If you don't provide a server address, Disconsulate will use 
+  // If you don't provide a server address, Disconsulate will use
   // environment variables.
   const client = new Disconsulate("http://consul.local:8500");
 
@@ -31,7 +30,7 @@ async function fetch_database() {
   client.on("change", (service) => console.log(service));
 
   // getService returns a promise of a registered service.
-  // Disconsulate watches services in the background to automatically update 
+  // Disconsulate watches services in the background to automatically update
   // its cache.
   try {
       let database = await client.getService("database");
@@ -154,12 +153,12 @@ Create a new instance of the Consulite class.
     * `maxTries`: The maximum number of times to retry a failed request (default: 20)
   * `logger`: an object exposing debug, info, error, and fatal methods.
 
-### getService(name, [options])
+### getService(options)
 
 Start watching a service, and return a registered address and port.
 
-* `name`: the service name as registered with Consul.
 * `options`: an object with the following properties
+  * `service`: the service name as registered with Consul.
   * `dc`: the datacentre to search for registered services.
   * `tags`: an array of that must be registered on an instance, used for filtering the registered addresses.
   * `node`: an object of key/value pairs that will be used to filter by node metadata.

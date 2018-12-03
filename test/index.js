@@ -92,7 +92,9 @@ class TestClient {
   }
 
   async getService(service, opts) {
-    const result = await this.client.getService(service, opts);
+    opts = opts || {};
+    opts.service = service;
+    const result = await this.client.getService(opts);
     return result;
   }
 
